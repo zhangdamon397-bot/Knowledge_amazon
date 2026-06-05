@@ -2,6 +2,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import Fastify from "fastify";
 import { loadConfig } from "./config.js";
+import { registerRoutes } from "./routes.js";
 
 export function buildServer() {
   const app = Fastify({
@@ -21,6 +22,8 @@ export function buildServer() {
     ok: true,
     service: "knowledge-amazon-api"
   }));
+
+  app.register(registerRoutes);
 
   return app;
 }

@@ -6,3 +6,4 @@ coverage/
 uploads/
 .worktrees/
 *.log
+apps/*/test/*.js
