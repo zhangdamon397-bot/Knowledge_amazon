@@ -2,12 +2,16 @@ import type { FastifyInstance } from "fastify";
 import type { DocumentRecord, KnowledgeBase, User } from "@knowledge-amazon/shared";
 import { authenticate, type AuthenticatedRequest, signToken, verifyPassword } from "./auth.js";
 import { query, queryOne } from "./db.js";
+import { processNextJob } from "./ingestion.js";
 import { askQuestion, confidenceLabel } from "./rag.js";
 import { LocalStorageService } from "./storage.js";
 
 const storage = new LocalStorageService();
+let ingestionScheduled = false;
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  schedulePendingIngestion(app);
+
   app.post("/auth/login", async (request, reply) => {
     const body = request.body as { email?: string; password?: string };
     if (!body.email || !body.password) {
@@ -187,6 +191,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     await query("INSERT INTO ingestion_jobs (document_id) VALUES ($1)", [document.id]);
+    schedulePendingIngestion(app);
 
     return {
       documentId: document.id
@@ -261,6 +266,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
     const { id } = request.params as { id: string };
     await query("UPDATE ingestion_jobs SET status = 'pending', error_message = NULL WHERE id = $1", [id]);
+    schedulePendingIngestion(app);
     return { ok: true };
   });
 
@@ -300,6 +306,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     );
     return { conversations };
   });
+}
+
+function schedulePendingIngestion(app: FastifyInstance): void {
+  if (ingestionScheduled) {
+    return;
+  }
+
+  ingestionScheduled = true;
+  setTimeout(() => {
+    void drainPendingIngestion(app);
+  }, 0);
+}
+
+async function drainPendingIngestion(app: FastifyInstance): Promise<void> {
+  try {
+    while (await processNextJob()) {
+      // Keep draining pending jobs so uploaded documents move beyond the uploaded state.
+    }
+  } catch (error) {
+    app.log.error({ error }, "Failed to process pending ingestion jobs");
+  } finally {
+    ingestionScheduled = false;
+  }
 }
 
 interface KnowledgeBaseRow {
