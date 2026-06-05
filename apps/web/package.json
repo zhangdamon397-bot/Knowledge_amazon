@@ -1,0 +1,25 @@
+{
+  "name": "@knowledge-amazon/web",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.json && vite build",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@knowledge-amazon/shared": "file:../../packages/shared",
+    "@vitejs/plugin-react": "^6.0.0",
+    "lucide-react": "^0.468.0",
+    "vite": "^8.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.8"
+  }
+}
