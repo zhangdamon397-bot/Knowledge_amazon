@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+uploads/
+.worktrees/
+*.log
+apps/*/test/*.js
