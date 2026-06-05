@@ -130,6 +130,10 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/documents/upload", { preHandler: authenticate }, async (request, reply) => {
     const user = (request as AuthenticatedRequest).user;
+    if (user.role === "readonly") {
+      return reply.code(403).send({ error: "Read-only users cannot upload documents" });
+    }
+
     const parts = request.parts();
     const fields = new Map<string, string>();
     let fileBuffer: Buffer | null = null;
@@ -208,7 +212,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.post("/documents/:id/soft-delete", { preHandler: authenticate }, async (request) => {
+  app.post("/documents/:id/soft-delete", { preHandler: authenticate }, async (request, reply) => {
+    const user = (request as AuthenticatedRequest).user;
+    if (user.role === "readonly") {
+      return reply.code(403).send({ error: "Read-only users cannot delete documents" });
+    }
+
     const { id } = request.params as { id: string };
     await query("UPDATE documents SET status = 'soft_deleted', deleted_at = now(), updated_at = now() WHERE id = $1", [
       id
@@ -244,7 +253,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { jobs };
   });
 
-  app.post("/jobs/:id/retry", { preHandler: authenticate }, async (request) => {
+  app.post("/jobs/:id/retry", { preHandler: authenticate }, async (request, reply) => {
+    const user = (request as AuthenticatedRequest).user;
+    if (user.role === "readonly") {
+      return reply.code(403).send({ error: "Read-only users cannot retry jobs" });
+    }
+
     const { id } = request.params as { id: string };
     await query("UPDATE ingestion_jobs SET status = 'pending', error_message = NULL WHERE id = $1", [id]);
     return { ok: true };

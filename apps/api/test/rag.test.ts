@@ -28,6 +28,15 @@ describe("local providers", () => {
     expect(first).toEqual(second);
   });
 
+  it("scores related Chinese knowledge text higher than unrelated text", async () => {
+    const provider = new LocalEmbeddingProvider();
+    const query = await provider.embed("广告预算应该怎么控制？");
+    const related = await provider.embed("广告预算应该按照核心关键词、转化率和acos分层控制。");
+    const unrelated = await provider.embed("火星基地能源补给计划。");
+
+    expect(dot(query, related)).toBeGreaterThan(dot(query, unrelated));
+  });
+
   it("returns insufficient-evidence answer without contexts", async () => {
     const provider = new LocalChatProvider();
     const answer = await provider.answer("怎么优化广告？", [], true);
@@ -54,3 +63,7 @@ describe("local providers", () => {
     expect(answer).toContain("低转化词需要降低出价");
   });
 });
+
+function dot(left: number[], right: number[]): number {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}

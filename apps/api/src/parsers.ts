@@ -1,7 +1,7 @@
 import path from "node:path";
 import JSZip from "jszip";
 import mammoth from "mammoth";
-import pdfParse from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 
 export interface ParsedSegment {
   text: string;
@@ -12,8 +12,13 @@ export async function parseDocument(buffer: Buffer, filename: string): Promise<P
   const extension = path.extname(filename).toLowerCase();
 
   if (extension === ".pdf") {
-    const result = await pdfParse(buffer);
-    return splitPdfText(result.text);
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      return splitPdfText(result.text);
+    } finally {
+      await parser.destroy();
+    }
   }
 
   if (extension === ".pptx") {

@@ -17,17 +17,23 @@ Web: `http://localhost:5173`
 
 ## Verification
 
+Start PostgreSQL and the API before running the end-to-end RAG check:
+
 ```powershell
 npm run build
 npm run lint
 npm run test
+npm run db:up
+# in another terminal: npm --workspace apps/api run dev
 npm run verify:rag
 ```
 
 ## Seed Login
 
-- Email: `admin@local.test`
-- Password: `admin123456`
+- Admin: `admin@local.test`
+- Member: `member@local.test`
+- Read-only: `readonly@local.test`
+- Password for all seed users: `admin123456`
 
 ## Manual Acceptance Checks
 

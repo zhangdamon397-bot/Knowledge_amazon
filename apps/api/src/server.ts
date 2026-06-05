@@ -28,7 +28,7 @@ export function buildServer() {
   return app;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.env.NODE_ENV !== "test") {
   const config = loadConfig();
   const app = buildServer();
   await app.listen({

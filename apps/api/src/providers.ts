@@ -30,7 +30,7 @@ export class LocalEmbeddingProvider implements EmbeddingProvider {
 
   async embed(text: string): Promise<number[]> {
     const vector = new Array<number>(64).fill(0);
-    const tokens = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+    const tokens = tokenizeForEmbedding(text);
 
     for (const token of tokens) {
       const hash = createHash("sha256").update(token).digest();
@@ -163,4 +163,17 @@ export function toSqlVector(vector: number[]): string {
 
 function trimAnswer(content: string): string {
   return content.length > 500 ? `${content.slice(0, 500)}...` : content;
+}
+
+function tokenizeForEmbedding(text: string): string[] {
+  const normalized = text.toLowerCase();
+  const latinTokens = normalized.match(/[a-z0-9]+/g) ?? [];
+  const cjkChars = normalized.match(/[\p{Script=Han}]/gu) ?? [];
+  const cjkBigrams: string[] = [];
+
+  for (let index = 0; index < cjkChars.length - 1; index += 1) {
+    cjkBigrams.push(`${cjkChars[index]}${cjkChars[index + 1]}`);
+  }
+
+  return [...latinTokens, ...cjkChars, ...cjkBigrams];
 }
