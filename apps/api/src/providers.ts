@@ -57,10 +57,16 @@ export class LocalChatProvider implements ChatProvider {
     const best = contexts[0];
     const confidenceNote =
       best.relevanceScore < LOW_CONFIDENCE_THRESHOLD ? "（置信度偏低，建议核对引用来源。）" : "";
+    const selectedContexts = contexts.slice(0, 4);
+    const bullets = selectedContexts.map((context, index) => {
+      const snippet = trimAnswer(normalizeSnippet(context.content), 260);
+      return `${index + 1}. 《${context.documentTitle}》${context.sourceLabel}：${snippet}`;
+    });
 
     return [
-      `根据《${best.documentTitle}》${best.sourceLabel}，可以回答：`,
-      trimAnswer(best.content),
+      `根据检索到的 ${selectedContexts.length} 条资料，可以整理如下：`,
+      bullets.join("\n"),
+      `优先参考：《${best.documentTitle}》${best.sourceLabel}。`,
       confidenceNote
     ]
       .filter(Boolean)
@@ -161,8 +167,15 @@ export function toSqlVector(vector: number[]): string {
   return `[${vector.map((value) => Number(value.toFixed(6))).join(",")}]`;
 }
 
-function trimAnswer(content: string): string {
-  return content.length > 500 ? `${content.slice(0, 500)}...` : content;
+function trimAnswer(content: string, maxLength = 500): string {
+  return content.length > maxLength ? `${content.slice(0, maxLength)}...` : content;
+}
+
+function normalizeSnippet(content: string): string {
+  return content
+    .replace(/\s+/g, " ")
+    .replace(/([。！？；])\s*/g, "$1 ")
+    .trim();
 }
 
 function tokenizeForEmbedding(text: string): string[] {

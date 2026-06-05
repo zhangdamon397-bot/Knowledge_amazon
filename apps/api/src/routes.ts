@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { DocumentRecord, KnowledgeBase, User } from "@knowledge-amazon/shared";
+import type { ChatMessage, ConversationSummary, DocumentRecord, KnowledgeBase, User } from "@knowledge-amazon/shared";
 import { authenticate, type AuthenticatedRequest, signToken, verifyPassword } from "./auth.js";
 import { query, queryOne } from "./db.js";
 import { processNextJob } from "./ingestion.js";
@@ -296,15 +296,75 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/conversations", { preHandler: authenticate }, async (request) => {
     const user = (request as AuthenticatedRequest).user;
-    const conversations = await query(
-      `SELECT id, title, knowledge_base_id, client_id, project_id, created_at, updated_at
-       FROM conversations
-       WHERE user_id = $1
-       ORDER BY updated_at DESC
+    const conversations = await query<ConversationSummaryRow>(
+      `SELECT c.id,
+              c.title,
+              c.knowledge_base_id,
+              c.client_id,
+              c.project_id,
+              c.created_at,
+              COALESCE(max(m.created_at), c.updated_at) AS last_message_at,
+              count(m.id) AS message_count
+       FROM conversations c
+       LEFT JOIN messages m ON m.conversation_id = c.id
+       WHERE c.user_id = $1
+       GROUP BY c.id
+       ORDER BY last_message_at DESC
        LIMIT 50`,
       [user.id]
     );
-    return { conversations };
+    return { conversations: conversations.map(toConversationSummary) };
+  });
+
+  app.get("/conversations/:id", { preHandler: authenticate }, async (request, reply) => {
+    const user = (request as AuthenticatedRequest).user;
+    const { id } = request.params as { id: string };
+    const conversation = await queryOne<ConversationSummaryRow>(
+      `SELECT c.id,
+              c.title,
+              c.knowledge_base_id,
+              c.client_id,
+              c.project_id,
+              c.created_at,
+              COALESCE(max(m.created_at), c.updated_at) AS last_message_at,
+              count(m.id) AS message_count
+       FROM conversations c
+       LEFT JOIN messages m ON m.conversation_id = c.id
+       WHERE c.id = $1 AND c.user_id = $2
+       GROUP BY c.id`,
+      [id, user.id]
+    );
+
+    if (!conversation) {
+      return reply.code(404).send({ error: "Conversation not found" });
+    }
+
+    const messages = await query<MessageRow>(
+      `SELECT id, role, content, confidence, insufficient_evidence, created_at
+       FROM messages
+       WHERE conversation_id = $1
+       ORDER BY created_at ASC`,
+      [id]
+    );
+    const citations = await query<CitationRowForMessage>(
+      `SELECT c.message_id,
+              c.document_id,
+              c.chunk_id,
+              c.relevance_score,
+              c.cited_text,
+              c.source_label,
+              d.title AS document_title
+       FROM citations c
+       LEFT JOIN documents d ON d.id = c.document_id
+       WHERE c.message_id = ANY($1::uuid[])
+       ORDER BY c.created_at ASC`,
+      [messages.map((message) => message.id)]
+    );
+
+    return {
+      conversation: toConversationSummary(conversation),
+      messages: messages.map((message) => toChatMessage(message, citations))
+    };
   });
 }
 
@@ -356,6 +416,36 @@ interface DocumentRow {
   created_at: Date | string;
 }
 
+interface ConversationSummaryRow {
+  id: string;
+  title: string;
+  knowledge_base_id: string | null;
+  client_id: string | null;
+  project_id: string | null;
+  message_count: string | number;
+  last_message_at: Date | string;
+  created_at: Date | string;
+}
+
+interface MessageRow {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  confidence: string | number | null;
+  insufficient_evidence: boolean;
+  created_at: Date | string;
+}
+
+interface CitationRowForMessage {
+  message_id: string;
+  document_id: string | null;
+  chunk_id: string | null;
+  relevance_score: string | number;
+  cited_text: string;
+  source_label: string;
+  document_title: string | null;
+}
+
 function toKnowledgeBase(row: KnowledgeBaseRow): KnowledgeBase {
   return {
     id: row.id,
@@ -382,6 +472,40 @@ function toDocumentRecord(row: DocumentRow): DocumentRecord {
     status: row.status,
     parseError: row.parse_error,
     createdAt: new Date(row.created_at).toISOString()
+  };
+}
+
+function toConversationSummary(row: ConversationSummaryRow): ConversationSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    knowledgeBaseId: row.knowledge_base_id,
+    clientId: row.client_id,
+    projectId: row.project_id,
+    messageCount: Number(row.message_count),
+    lastMessageAt: new Date(row.last_message_at).toISOString(),
+    createdAt: new Date(row.created_at).toISOString()
+  };
+}
+
+function toChatMessage(row: MessageRow, citations: CitationRowForMessage[]): ChatMessage {
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    confidence: row.confidence === null ? null : Number(row.confidence),
+    insufficientEvidence: row.insufficient_evidence,
+    createdAt: new Date(row.created_at).toISOString(),
+    citations: citations
+      .filter((citation) => citation.message_id === row.id)
+      .map((citation) => ({
+        documentId: citation.document_id,
+        chunkId: citation.chunk_id,
+        relevanceScore: Number(citation.relevance_score),
+        citedText: citation.cited_text,
+        sourceLabel: citation.source_label,
+        documentTitle: citation.document_title ?? undefined
+      }))
   };
 }
 

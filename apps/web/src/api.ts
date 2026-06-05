@@ -1,4 +1,11 @@
-import type { ChatAnswer, DocumentRecord, KnowledgeBase, User } from "@knowledge-amazon/shared";
+import type {
+  ChatAnswer,
+  ConversationDetail,
+  ConversationSummary,
+  DocumentRecord,
+  KnowledgeBase,
+  User
+} from "@knowledge-amazon/shared";
 
 const API_BASE = "/api";
 
@@ -69,11 +76,23 @@ export class ApiClient {
     return this.request(`/jobs/${jobId}/retry`, { method: "POST" });
   }
 
-  async chat(question: string, knowledgeBaseId?: string): Promise<ChatAnswer & { confidenceLabel: string }> {
+  async chat(
+    question: string,
+    knowledgeBaseId?: string,
+    conversationId?: string
+  ): Promise<ChatAnswer & { confidenceLabel: string }> {
     return this.request("/chat", {
       method: "POST",
-      body: JSON.stringify({ question, knowledgeBaseId })
+      body: JSON.stringify({ question, knowledgeBaseId, conversationId })
     });
+  }
+
+  async conversations(): Promise<{ conversations: ConversationSummary[] }> {
+    return this.request("/conversations");
+  }
+
+  async conversation(id: string): Promise<ConversationDetail> {
+    return this.request(`/conversations/${id}`);
   }
 
   private async request<T>(path: string, init: RequestInit & { skipJsonHeader?: boolean } = {}): Promise<T> {

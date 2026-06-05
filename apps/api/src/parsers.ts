@@ -15,7 +15,7 @@ export async function parseDocument(buffer: Buffer, filename: string): Promise<P
     const parser = new PDFParse({ data: buffer });
     try {
       const result = await parser.getText();
-      return splitPdfText(result.text);
+      return splitPdfText(normalizeExtractedText(result.text));
     } finally {
       await parser.destroy();
     }
@@ -31,11 +31,11 @@ export async function parseDocument(buffer: Buffer, filename: string): Promise<P
 
   if (extension === ".docx") {
     const result = await mammoth.extractRawText({ buffer });
-    return [{ text: result.value, sourceLabel: "document" }];
+    return [{ text: normalizeExtractedText(result.value), sourceLabel: "document" }];
   }
 
   if (extension === ".txt" || extension === ".md") {
-    return [{ text: buffer.toString("utf8"), sourceLabel: "document" }];
+    return [{ text: normalizeExtractedText(buffer.toString("utf8")), sourceLabel: "document" }];
   }
 
   throw new Error(`Unsupported file type: ${extension}`);
@@ -65,7 +65,7 @@ async function parsePptx(buffer: Buffer): Promise<ParsedSegment[]> {
   const segments: ParsedSegment[] = [];
   for (const entry of slideEntries) {
     const xml = await zip.files[entry].async("text");
-    const text = extractXmlText(xml);
+    const text = normalizeExtractedText(extractXmlText(xml));
     if (text) {
       segments.push({
         text,
@@ -84,6 +84,22 @@ function slideNumber(entry: string): number {
 function extractXmlText(xml: string): string {
   const textNodes = [...xml.matchAll(/<a:t>(.*?)<\/a:t>/g)].map((match) => decodeXml(match[1]));
   return textNodes.join("\n").trim();
+}
+
+function normalizeExtractedText(text: string): string {
+  let normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  let compacted = normalized.replace(/([\p{Script=Han}])\s+([\p{Script=Han}])/gu, "$1$2");
+  while (compacted !== normalized) {
+    normalized = compacted;
+    compacted = normalized.replace(/([\p{Script=Han}])\s+([\p{Script=Han}])/gu, "$1$2");
+  }
+
+  return compacted;
 }
 
 function decodeXml(value: string): string {
