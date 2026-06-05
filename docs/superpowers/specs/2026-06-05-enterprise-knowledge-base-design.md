@@ -1,304 +1,304 @@
-# Enterprise Knowledge Base Design
+# 企业级知识库设计
 
-Date: 2026-06-05
+日期：2026-06-05
 
-Project root: `D:\codex\亚马逊项目`
+项目根目录：`D:\codex\亚马逊项目`
 
-## Decision
+## 决策
 
-Build a new internal enterprise knowledge base from scratch. Prior attempts and historical architecture notes are references only, not inherited constraints.
+从零开始构建一个新的内部企业级知识库。之前的尝试和历史架构笔记只作为参考，不作为必须继承的约束。
 
-The first version should be a real RAG knowledge base, not a visual-only prototype. It should ingest existing PDF, PPT/PPTX, Word, TXT, and Markdown materials, index them, answer questions from the indexed content, and show citations.
+第一版应该是真实可用的 RAG 知识库，而不是只有界面的原型。它需要能够导入现有的 PDF、PPT/PPTX、Word、TXT 和 Markdown 资料，完成索引，并基于已索引内容回答问题，同时展示引用来源。
 
-The architecture should follow enterprise-grade boundaries, but the first implementation should stay small: one deployable web application, one database, local file storage through an abstraction, and a worker process for ingestion.
+架构上要保留企业级系统的边界，但第一版实现应保持小而可部署：一个可运行的 Web 应用、一个数据库、通过抽象层封装的本地文件存储，以及一个用于资料导入处理的 worker 进程。
 
-## Goals
+## 目标
 
-- Support internal team use only in version 1.
-- Prioritize document ingestion and intelligent Q&A.
-- Support real PDF and PPT/PPTX training materials from the first version.
-- Preserve source citations for answers.
-- Support a hybrid AI strategy: cloud AI services for normal internal content, with sensitivity fields and routing boundaries for future private processing.
-- Use secure defaults for sensitive material: customer-confidential content is not sent to cloud AI unless an administrator explicitly enables it.
-- Start on a local machine or LAN, then migrate to a cloud server when mature.
-- Design boundaries so the system can evolve toward a heavier enterprise version without a full rewrite.
+- 第一版只支持内部团队使用。
+- 优先实现文档导入和智能问答。
+- 第一版就支持真实 PDF 和 PPT/PPTX 培训资料。
+- 回答必须保留来源引用。
+- 支持混合 AI 策略：普通内部内容可用云端 AI 服务；同时通过敏感等级字段和路由边界，为后续私有化处理保留空间。
+- 对敏感资料采用安全默认值：客户机密内容默认不发送到云端 AI，除非管理员显式启用。
+- 先在本机或局域网启动，成熟后再迁移到云服务器。
+- 设计边界要支持后续演进到更重的企业版，而不需要整体重写。
 
-## Non-Goals
+## 非目标
 
-- Customer login or customer portal.
-- Multi-company SaaS billing.
-- Complex document approval workflows.
-- Private model deployment in version 1.
-- OCR for scanned PDFs in version 1.
-- Image understanding for PPT screenshots or diagrams in version 1.
-- Excel business-data analytics in the RAG pipeline.
-- SSO, high availability, cluster deployment, or complete audit logging in version 1.
-- Mixing structured business data such as ad tables and profit reports directly into document RAG.
+- 客户登录或客户门户。
+- 多公司 SaaS 计费。
+- 复杂的文档审批流程。
+- 第一版私有模型部署。
+- 第一版扫描 PDF 的 OCR。
+- 第一版 PPT 截图或图表的图像理解。
+- 在 RAG 管道中直接混入广告表、利润表等结构化业务数据分析。
+- SSO、高可用、集群部署或完整审计日志。
+- 将结构化业务数据，例如广告表和利润报表，直接混入文档 RAG。
 
-## Product Scope
+## 产品范围
 
-Version 1 includes:
+第一版包括：
 
-- Knowledge base management.
-- Document upload with metadata.
-- Document parsing, chunking, embedding, and vector indexing.
-- Question answering over selected knowledge-base scopes.
-- Citation display under each answer.
-- Lightweight client and project ownership fields.
-- Sensitivity levels for future cloud/private processing decisions.
-- Visible ingestion status and failure reasons.
+- 知识库管理。
+- 带元数据的文档上传。
+- 文档解析、切片、向量化和索引。
+- 在选定知识库范围内进行问答。
+- 每个回答下展示引用来源。
+- 轻量的客户和项目归属字段。
+- 为后续云端/私有处理决策准备敏感等级。
+- 可见的导入状态和失败原因。
 
-Version 1 intentionally keeps management lightweight because the team and project count are still small.
+第一版会刻意保持管理功能轻量，因为当前团队人数和项目数量都还不多。
 
-## User Flow
+## 用户流程
 
-1. A team member creates or selects a knowledge base.
-2. The member uploads documents and chooses metadata:
-   - Knowledge base
-   - Client or project if applicable
-   - Tags
-   - Sensitivity level
-   - Whether to index immediately
-3. The system saves the original file and creates a document record.
-4. The worker parses, chunks, embeds, and indexes the document.
-5. The document status becomes indexed, failed, or waiting for OCR/private processing.
-6. A team member asks a question in a selected scope.
-7. The system retrieves relevant chunks, asks the LLM to answer from those chunks, and saves citations.
-8. The UI shows the answer and citation sources.
+1. 团队成员创建或选择一个知识库。
+2. 成员上传文档并选择元数据：
+   - 知识库
+   - 客户或项目，如果适用
+   - 标签
+   - 敏感等级
+   - 是否立即索引
+3. 系统保存原始文件并创建文档记录。
+4. Worker 解析、切片、向量化并索引文档。
+5. 文档状态变为已索引、失败，或等待 OCR/私有处理。
+6. 团队成员在选定范围内提问。
+7. 系统检索相关切片，让 LLM 基于这些切片回答，并保存引用。
+8. UI 展示回答和引用来源。
 
-## Architecture
+## 架构
 
-Use a modular monolith for version 1. This keeps deployment simple while preserving boundaries for future enterprise growth.
+第一版采用模块化单体架构。这样部署简单，同时保留未来企业级扩展的边界。
 
-Main modules:
+主要模块：
 
-- Web UI: document upload, knowledge-base management, ingestion status, chat, citations, and settings.
-- Backend API: users, clients, projects, knowledge bases, documents, ingestion jobs, conversations, messages, citations, and model configuration.
-- Database: PostgreSQL with pgvector.
-- Storage service: local filesystem in version 1, replaceable with object storage later.
-- Worker: asynchronous ingestion pipeline.
-- Document parsers: file-type-specific text extraction.
-- Embedding provider: cloud provider first, replaceable by private embedding service later.
-- Vector search provider: pgvector first, replaceable by Qdrant or Milvus later.
-- LLM provider: cloud chat model first, replaceable or routable later.
-- RAG service: retrieval, context assembly, answer generation, and citation persistence.
+- Web UI：文档上传、知识库管理、导入状态、聊天、引用和设置。
+- 后端 API：用户、客户、项目、知识库、文档、导入任务、会话、消息、引用和模型配置。
+- 数据库：PostgreSQL + pgvector。
+- 存储服务：第一版为本地文件系统，后续可替换为对象存储。
+- Worker：异步文档导入管道。
+- 文档解析器：按文件类型提取文本。
+- Embedding provider：先用云端 provider，后续可替换为私有 embedding 服务。
+- 向量检索 provider：先用 pgvector，后续可替换为 Qdrant 或 Milvus。
+- LLM provider：先用云端聊天模型，后续可替换或按策略路由。
+- RAG 服务：检索、上下文组装、回答生成和引用持久化。
 
-Do not start with microservices. If the system later needs separation, split document processing and model calls first.
+不要一开始就做微服务。如果后续确实需要拆分，优先拆文档处理和模型调用。
 
-## Recommended Technology
+## 推荐技术
 
-- Frontend: React + Vite.
-- Backend: Node.js with Fastify or NestJS.
-- Database: PostgreSQL + pgvector.
-- Storage: local directory behind a `StorageService` interface.
-- Background jobs: database-backed job table plus worker process in version 1.
-- AI integration: provider abstractions for embedding and chat.
-- Deployment: local machine or LAN first, then cloud server.
-- Local runtime: Docker Compose should run PostgreSQL with pgvector for version 1.
+- 前端：React + Vite。
+- 后端：Node.js + Fastify 或 NestJS。
+- 数据库：PostgreSQL + pgvector。
+- 存储：通过 `StorageService` 接口封装的本地目录。
+- 后台任务：第一版使用数据库任务表 + worker 进程。
+- AI 集成：为 embedding 和 chat 抽象 provider。
+- 部署：先本机或局域网，再上云服务器。
+- 本地运行时：第一版用 Docker Compose 运行 PostgreSQL + pgvector。
 
-Final package choices should be made during implementation planning after checking current library support and Windows compatibility.
+最终包选择应在实施计划阶段结合当前库支持和 Windows 兼容性决定。
 
-## Core Data Model
+## 核心数据模型
 
 ### `users`
 
-Internal users. Fields include name, email, role, status, and timestamps.
+内部用户。字段包括姓名、邮箱、角色、状态和时间戳。
 
 ### `clients`
 
-Client or organization boundary. Also supports an internal client-like record for internal training materials.
+客户或组织边界。也支持用于内部培训资料的内部客户类记录。
 
 ### `projects`
 
-Specific project or business topic under a client.
+客户下面的具体项目或业务主题。
 
 ### `knowledge_bases`
 
-Knowledge-base records. Fields include name, type, client ownership, project ownership, visibility, sensitivity level, and timestamps.
+知识库记录。字段包括名称、类型、客户归属、项目归属、可见性、敏感等级和时间戳。
 
 ### `documents`
 
-Original uploaded documents. Fields include original filename, file type, storage path, size, uploader, knowledge base, client, project, tags, sensitivity level, parse status, index status, version, and timestamps.
+上传的原始文档。字段包括原始文件名、文件类型、存储路径、大小、上传人、知识库、客户、项目、标签、敏感等级、解析状态、索引状态、版本和时间戳。
 
 ### `document_chunks`
 
-Searchable text chunks. Fields include document ID, chunk index, text content, page or slide information, section information, token count, embedding status, hash, and timestamps.
+可检索文本切片。字段包括文档 ID、切片序号、文本内容、页码或幻灯片信息、章节信息、token 数、embedding 状态、hash 和时间戳。
 
 ### `embeddings`
 
-Vector records for chunks when using pgvector. Fields include chunk ID, provider, model, vector, and timestamps.
+使用 pgvector 时的向量记录。字段包括切片 ID、provider、模型、向量和时间戳。
 
 ### `conversations`
 
-Question-answer sessions. Fields include user ID, selected knowledge-base scope, client scope, project scope, title, and timestamps.
+问答会话。字段包括用户 ID、选定知识库范围、客户范围、项目范围、标题和时间戳。
 
 ### `messages`
 
-Conversation messages. Fields include conversation ID, role, question or answer text, model used, retrieval scope, and timestamps.
+会话消息。字段包括会话 ID、角色、问题或回答文本、使用模型、检索范围和时间戳。
 
 ### `citations`
 
-Answer citations. Fields include message ID, document ID, chunk ID, relevance score, cited text, page or slide information, and section information.
+回答引用。字段包括消息 ID、文档 ID、切片 ID、相关性分数、引用文本、页码或幻灯片信息、章节信息。
 
 ### `ingestion_jobs`
 
-Document processing jobs. Fields include job type, document ID, status, error message, retry count, start time, end time, and timestamps.
+文档处理任务。字段包括任务类型、文档 ID、状态、错误信息、重试次数、开始时间、结束时间和时间戳。
 
 ### `model_providers`
 
-Model configuration. Fields include provider, model type, model name, purpose, enabled status, and configuration references.
+模型配置。字段包括 provider、模型类型、模型名称、用途、启用状态和配置引用。
 
-## Roles and Access
+## 角色和权限
 
-Version 1 uses minimal real login and simple internal roles:
+第一版使用最小真实登录和简单内部角色：
 
-- Admin: manage all knowledge bases, documents, settings, and users.
-- Member: view, upload, ask questions, and manage allowed knowledge bases.
-- Read-only: view and ask questions in allowed knowledge bases.
+- Admin：管理所有知识库、文档、设置和用户。
+- Member：查看、上传、提问，并管理被允许访问的知识库。
+- Read-only：在被允许访问的知识库中查看和提问。
 
-Every API request that reads documents, chunks, conversations, or citations must have a real authenticated user. Version 1 does not need customer users, field-level permissions, password reset, user invitation workflows, or SSO.
+所有读取文档、切片、会话或引用的 API 请求都必须有真实认证用户。第一版不需要客户用户、字段级权限、密码重置、用户邀请流程或 SSO。
 
-## Sensitivity Levels
+## 敏感等级
 
-Use sensitivity from the first version:
+第一版就使用敏感等级：
 
-- `public_internal`: normal internal material, allowed to use cloud embedding and cloud chat.
-- `client_confidential`: client material, access-limited; cloud embedding and cloud chat are disabled by default. An administrator must explicitly enable cloud processing at the knowledge-base or document level.
-- `restricted`: high-sensitivity material; version 1 should not send it to cloud embedding or cloud chat.
+- `public_internal`：普通内部资料，允许使用云端 embedding 和云端 chat。
+- `client_confidential`：客户资料，访问受限；默认禁用云端 embedding 和云端 chat。必须由管理员在知识库或文档级别显式启用云端处理。
+- `restricted`：高敏感资料；第一版不得发送到云端 embedding 或云端 chat。
 
-Restricted documents may be stored and shown as waiting for private processing, but should not be indexed through cloud providers. Customer-confidential documents follow the same blocked-by-default behavior until an administrator opts in to cloud processing.
+受限文档可以被存储，并展示为等待私有处理，但不应通过云端 provider 建索引。客户机密文档同样默认阻断，直到管理员选择启用云端处理。
 
-## Ingestion Pipeline
+## 导入管道
 
-1. Save uploaded file through `StorageService`.
-2. Create a `documents` record.
-3. Create an `ingestion_jobs` record with `pending` status.
-4. Worker claims the job and marks it `processing`.
-5. Extract text by file type:
-   - PDF: extract text and page information.
-   - PPT/PPTX: extract slide text and slide numbers.
-   - Word: extract body text and headings.
-   - TXT/Markdown: read text directly.
-6. If no meaningful text is extracted, mark the document as needing OCR or failed with a clear reason.
-7. Chunk text by heading, page or slide, paragraph, and token size.
-8. Store chunks in `document_chunks`.
-9. Generate embeddings according to sensitivity policy.
-10. Store vectors in pgvector.
-11. Mark the document indexed.
-12. On failure, save error reason and retry metadata.
+1. 通过 `StorageService` 保存上传文件。
+2. 创建 `documents` 记录。
+3. 创建状态为 `pending` 的 `ingestion_jobs` 记录。
+4. Worker 认领任务，并标记为 `processing`。
+5. 按文件类型提取文本：
+   - PDF：提取文本和页码信息。
+   - PPT/PPTX：提取幻灯片文本和页码。
+   - Word：提取正文文本和标题。
+   - TXT/Markdown：直接读取文本。
+6. 如果没有提取到有意义文本，将文档标记为需要 OCR 或失败，并给出明确原因。
+7. 按标题、页码或幻灯片、段落和 token 大小切片。
+8. 将切片存入 `document_chunks`。
+9. 按敏感策略生成 embedding。
+10. 将向量存入 pgvector。
+11. 将文档标记为已索引。
+12. 失败时保存错误原因和重试元数据。
 
-## RAG Q&A Flow
+## RAG 问答流程
 
-1. User selects a retrieval scope:
-   - All internal materials
-   - A knowledge base
-   - A client
-   - A project
-2. User asks a question.
-3. System creates a query embedding.
-4. System searches vectors only within the selected and authorized scope.
-5. System retrieves top relevant chunks, initially top 5 to 8.
-6. System builds an LLM prompt with:
-   - Question
-   - Retrieved chunks
-   - Document titles
-   - Page, slide, or section source information
-   - Instruction to answer only from supplied sources
-7. LLM generates the answer.
-8. System saves the answer and citation records.
-9. UI displays the answer and cited documents or chunks.
-10. If retrieval relevance is too low, the system returns an insufficient-evidence response instead of asking the LLM to answer freely.
-11. The UI shows a confidence indicator based on retrieval score so users can see whether an answer is strongly or weakly grounded.
+1. 用户选择检索范围：
+   - 全部内部资料
+   - 某个知识库
+   - 某个客户
+   - 某个项目
+2. 用户提问。
+3. 系统创建查询 embedding。
+4. 系统只在选定且有权限的范围内搜索向量。
+5. 系统检索最相关的切片，初始取 top 5 到 8。
+6. 系统构造 LLM prompt，包含：
+   - 问题
+   - 检索到的切片
+   - 文档标题
+   - 页码、幻灯片或章节来源信息
+   - 只能基于给定来源回答的指令
+7. LLM 生成回答。
+8. 系统保存回答和引用记录。
+9. UI 展示回答和引用文档或切片。
+10. 如果检索相关性太低，系统返回资料不足，而不是让 LLM 自由回答。
+11. UI 基于检索分数显示置信度指标，让用户知道回答依据强弱。
 
-## Pages
+## 页面
 
-### Dashboard
+### 工作台
 
-Shows knowledge-base count, document count, indexed count, failed jobs, recent uploads, and recent Q&A.
+展示知识库数量、文档数量、已索引数量、失败任务、近期上传和近期问答。
 
-### Knowledge Base List
+### 知识库列表
 
-Shows name, type, client or project ownership, document count, index status, and sensitivity level.
+展示名称、类型、客户或项目归属、文档数量、索引状态和敏感等级。
 
-### Knowledge Base Detail
+### 知识库详情
 
-Shows document list, upload action, tag filters, status filters, failed retries, and document detail links.
+展示文档列表、上传操作、标签筛选、状态筛选、失败重试和文档详情链接。
 
-### Document Detail
+### 文档详情
 
-Shows metadata, parse status, index status, chunk count, errors, and citation history.
+展示元数据、解析状态、索引状态、切片数量、错误和引用历史。
 
-### Upload
+### 上传
 
-Requires knowledge base, optional client or project, tags, sensitivity level, and immediate-index choice.
+要求选择知识库，可选客户或项目、标签、敏感等级和是否立即索引。
 
-### Intelligent Q&A
+### 智能问答
 
-Includes conversation list, chat area, scope selector, and citation display.
+包括会话列表、聊天区、范围选择器和引用展示。
 
-### Task Queue
+### 任务队列
 
-Shows parsing, chunking, embedding, indexing, failed jobs, and retry actions.
+展示解析、切片、embedding、索引、失败任务和重试操作。
 
-### Settings
+### 设置
 
-Stores model configuration, parsing configuration, and sensitivity handling rules.
+保存模型配置、解析配置和敏感处理规则。
 
-## Error Handling
+## 错误处理
 
-- Unsupported file type: reject with a clear message.
-- Empty text extraction: mark as needing OCR or failed.
-- Embedding provider failure: mark job failed and allow retry.
-- LLM provider failure: show failure in chat without losing the question.
-- Restricted document cloud attempt: block and show policy reason.
-- Document deletion: use two-level deletion. Normal deletion is soft deletion and removes the document from future retrieval while preserving history. Admin purge physically removes the original file, chunks, and embeddings; historical citations should display that the source was deleted.
+- 不支持的文件类型：拒绝并给出明确提示。
+- 空文本提取：标记为需要 OCR 或失败。
+- Embedding provider 失败：将任务标记为失败并允许重试。
+- LLM provider 失败：在聊天中展示失败，但不丢失问题。
+- 受限文档尝试云端处理：阻断并展示策略原因。
+- 文档删除：使用两级删除。普通删除为软删除，从后续检索中移除但保留历史；管理员 purge 会物理删除原始文件、切片和 embedding；历史引用应显示来源已删除。
 
-## Verification Criteria
+## 验收标准
 
-Version 1 is successful when:
+第一版成功的标准：
 
-- A real PDF can be uploaded and reaches indexed status.
-- A real PPTX can be uploaded and reaches indexed status when text is extractable.
-- A question about indexed PDF/PPTX content returns an answer based on the document.
-- The answer displays source document and page, slide, or chunk information.
-- A question outside the uploaded materials returns an insufficient-evidence response.
-- A low-confidence answer displays a confidence reminder based on retrieval score.
-- A scanned PDF or unparseable document shows a visible failure or OCR-needed state.
-- Soft-deleting a document removes it from future retrieval while preserving history; admin purge physically removes the file, chunks, and embeddings.
-- A restricted document is not sent to cloud embedding or chat.
-- A client-confidential document is not sent to cloud embedding or chat unless an administrator explicitly enables cloud processing.
-- Restarting the application keeps documents, indexing status, and conversations.
-- Version 1 runs locally with Docker Compose for PostgreSQL + pgvector.
-- Version 1 uses minimal real login for admin, member, and read-only roles.
-- Build, lint, and focused RAG checks pass.
+- 真实 PDF 可以上传并达到已索引状态。
+- 真实 PPTX 在文本可提取时可以上传并达到已索引状态。
+- 关于已索引 PDF/PPTX 内容的问题能基于文档返回回答。
+- 回答展示来源文档和页码、幻灯片或切片信息。
+- 上传资料之外的问题返回资料不足。
+- 低置信回答基于检索分数展示置信度提醒。
+- 扫描 PDF 或不可解析文档显示可见的失败或需要 OCR 状态。
+- 软删除文档会从后续检索中移除，同时保留历史；管理员 purge 会物理删除文件、切片和 embedding。
+- 受限文档不会被发送到云端 embedding 或 chat。
+- 客户机密文档不会被发送到云端 embedding 或 chat，除非管理员显式启用云端处理。
+- 应用重启后仍保留文档、索引状态和会话。
+- 第一版可在本地通过 Docker Compose 运行 PostgreSQL + pgvector。
+- 第一版为 admin、member 和 read-only 角色使用最小真实登录。
+- build、lint 和聚焦 RAG 检查通过。
 
-## Evolution Path
+## 演进路线
 
-### Version 1: Local Real RAG
+### Version 1：本地真实 RAG
 
-Implement upload, parsing, chunking, vector indexing, Q&A, citations, lightweight ownership, and sensitivity policy.
+实现上传、解析、切片、向量索引、问答、引用、轻量归属和敏感策略。
 
-### Version 2: LAN Team Use
+### Version 2：局域网团队使用
 
-Add stronger login, role management, batch upload, better retry controls, and backup workflow.
+增加更强登录、角色管理、批量上传、更好的重试控制和备份流程。
 
-### Version 3: Cloud Server
+### Version 3：云服务器
 
-Separate database, file storage, backend service, and worker deployment. Add HTTPS, backups, access control, and operational monitoring.
+拆分数据库、文件存储、后端服务和 worker 部署。增加 HTTPS、备份、访问控制和运营监控。
 
-### Version 4: Enterprise Enhancements
+### Version 4：企业增强
 
-Add audit logs, fine-grained permissions, model routing, private processing for sensitive materials, OCR, SSO, and alerting.
+增加审计日志、细粒度权限、模型路由、敏感资料私有处理、OCR、SSO 和告警。
 
-## Open Implementation Decisions
+## 待定实施决策
 
-These decisions are intentionally left for the implementation plan:
+这些决策有意留到实施计划中确定：
 
-- Fastify versus NestJS.
-- Exact document parsing libraries for PDF, PPTX, and Word.
-- Initial cloud model provider.
-- Initial retrieval threshold values for insufficient-evidence and confidence display.
+- Fastify 还是 NestJS。
+- PDF、PPTX 和 Word 的具体文档解析库。
+- 初始云模型 provider。
+- 资料不足和置信度显示的初始检索阈值。
 
-## Approval State
+## 批准状态
 
-The product scope, architecture, data model, ingestion flow, Q&A flow, page structure, implementation boundary, and verification criteria were reviewed conversationally and approved before writing this spec.
+产品范围、架构、数据模型、导入流程、问答流程、页面结构、实施边界和验收标准，已在对话中评审并批准后写入本规格文档。

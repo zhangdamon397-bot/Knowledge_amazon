@@ -150,7 +150,10 @@ CREATE INDEX idx_embeddings_vector ON embeddings USING ivfflat (embedding vector
 CREATE INDEX idx_jobs_status ON ingestion_jobs(status, created_at);
 
 INSERT INTO users (name, email, password_hash, role)
-VALUES ('Admin', 'admin@local.test', '$2b$10$K9LNgncSE/A5OVg2Aiv4A.arv.UsIaV0rswRiake4CVR91V3WqrQO', 'admin');
+VALUES
+  ('Admin', 'admin@local.test', '$2b$10$K9LNgncSE/A5OVg2Aiv4A.arv.UsIaV0rswRiake4CVR91V3WqrQO', 'admin'),
+  ('Member', 'member@local.test', '$2b$10$K9LNgncSE/A5OVg2Aiv4A.arv.UsIaV0rswRiake4CVR91V3WqrQO', 'member'),
+  ('Read Only', 'readonly@local.test', '$2b$10$K9LNgncSE/A5OVg2Aiv4A.arv.UsIaV0rswRiake4CVR91V3WqrQO', 'readonly');
 
 INSERT INTO clients (name, type)
 VALUES ('内部资料', 'internal');

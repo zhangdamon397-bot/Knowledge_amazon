@@ -24,12 +24,13 @@ interface RetrievedChunk {
   source_label: string;
   document_title: string;
   relevance_score: number;
+  lexical_score: number;
 }
 
 export async function askQuestion(input: AskQuestionInput): Promise<ChatAnswer> {
   const embeddingProvider = createEmbeddingProvider();
   const queryEmbedding = await embeddingProvider.embed(input.question);
-  const chunks = await retrieveChunks(queryEmbedding, input);
+  const chunks = await retrieveChunks(queryEmbedding, input.question, input);
   const confidence = chunks[0]?.relevance_score ?? 0;
   const insufficientEvidence = confidence < INSUFFICIENT_EVIDENCE_THRESHOLD;
 
@@ -58,6 +59,7 @@ export async function askQuestion(input: AskQuestionInput): Promise<ChatAnswer> 
     conversationId,
     input.question
   ]);
+  await query("UPDATE conversations SET updated_at = now() WHERE id = $1", [conversationId]);
 
   const contexts: RetrievedContext[] = chunks.map((chunk) => ({
     content: chunk.content,
@@ -113,9 +115,10 @@ export async function askQuestion(input: AskQuestionInput): Promise<ChatAnswer> 
   };
 }
 
-async function retrieveChunks(vector: number[], input: AskQuestionInput): Promise<RetrievedChunk[]> {
+async function retrieveChunks(vector: number[], question: string, input: AskQuestionInput): Promise<RetrievedChunk[]> {
   const filters = ["d.status = 'indexed'", "d.deleted_at IS NULL"];
-  const values: unknown[] = [toSqlVector(vector), TOP_K_CHUNKS];
+  const searchTerms = tokenizeSearchTerms(question);
+  const values: unknown[] = [toSqlVector(vector), TOP_K_CHUNKS * 4, searchTerms];
 
   if (input.knowledgeBaseId) {
     values.push(input.knowledgeBaseId);
@@ -139,15 +142,49 @@ async function retrieveChunks(vector: number[], input: AskQuestionInput): Promis
        c.content,
        c.source_label,
        d.title AS document_title,
-       1 - (e.embedding <=> $1::vector) AS relevance_score
+       LEAST(
+         0.99,
+         (1 - (e.embedding <=> $1::vector)) +
+         (
+           SELECT COALESCE(count(*) * 0.08, 0)
+           FROM unnest($3::text[]) term
+           WHERE lower(c.content) LIKE '%' || lower(term) || '%'
+              OR lower(d.title) LIKE '%' || lower(term) || '%'
+         )
+       ) AS relevance_score,
+       (
+         SELECT COALESCE(count(*), 0)
+         FROM unnest($3::text[]) term
+         WHERE lower(c.content) LIKE '%' || lower(term) || '%'
+            OR lower(d.title) LIKE '%' || lower(term) || '%'
+       ) AS lexical_score
      FROM embeddings e
      JOIN document_chunks c ON c.id = e.chunk_id
      JOIN documents d ON d.id = c.document_id
      WHERE ${filters.join(" AND ")}
-     ORDER BY e.embedding <=> $1::vector
+     ORDER BY relevance_score DESC, e.embedding <=> $1::vector
      LIMIT $2`,
     values
   );
+}
+
+function tokenizeSearchTerms(question: string): string[] {
+  const normalized = question.toLowerCase();
+  const latinTerms = normalized.match(/[a-z0-9]{2,}/g) ?? [];
+  const cjkChars = normalized.match(/[\p{Script=Han}]/gu) ?? [];
+  const cjkTerms: string[] = [];
+
+  for (const size of [2, 3, 4]) {
+    for (let index = 0; index <= cjkChars.length - size; index += 1) {
+      cjkTerms.push(cjkChars.slice(index, index + size).join(""));
+    }
+  }
+
+  return [...new Set([...latinTerms, ...cjkTerms].filter((term) => !isStopTerm(term)))].slice(0, 32);
+}
+
+function isStopTerm(term: string): boolean {
+  return ["介绍", "一下", "这个", "那个", "什么", "怎么", "如何", "资料", "里面", "方式"].includes(term);
 }
 
 interface CitationRow {

@@ -349,7 +349,7 @@ select {
 }
 
 .chat-layout {
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
 }
 
 .kb-list {
@@ -453,9 +453,52 @@ select {
   color: #46515c;
 }
 
+.conversation-panel,
 .chat-panel,
 .citations-panel {
   min-height: calc(100vh - 114px);
+}
+
+.conversation-list {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.conversation-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid #e5ebef;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #18212f;
+  padding: 10px;
+  text-align: left;
+}
+
+.conversation-item-active {
+  border-color: #99d8cf;
+  background: #eefaf7;
+}
+
+.conversation-item strong,
+.conversation-item small {
+  display: block;
+}
+
+.conversation-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item small {
+  color: #65717d;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .chat-thread {
@@ -471,6 +514,11 @@ select {
   border-radius: 8px;
   padding: 14px;
   line-height: 1.65;
+}
+
+.message p {
+  margin: 8px 0;
+  white-space: pre-wrap;
 }
 
 .message-user {

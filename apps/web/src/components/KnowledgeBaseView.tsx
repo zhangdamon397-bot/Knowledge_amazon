@@ -39,7 +39,7 @@ export function KnowledgeBaseView({
     try {
       await api.uploadDocument(form);
       setFile(null);
-      await onRefresh();
+      await refreshUntilIngestionSettles(onRefresh);
     } finally {
       setBusy(false);
     }
@@ -123,4 +123,11 @@ export function KnowledgeBaseView({
       </section>
     </div>
   );
+}
+
+async function refreshUntilIngestionSettles(onRefresh: () => Promise<void>): Promise<void> {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await onRefresh();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+  }
 }

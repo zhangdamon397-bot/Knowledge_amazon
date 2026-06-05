@@ -61,3 +61,29 @@ export interface ChatAnswer {
   insufficientEvidence: boolean;
   citations: Citation[];
 }
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  knowledgeBaseId: string | null;
+  clientId: string | null;
+  projectId: string | null;
+  messageCount: number;
+  lastMessageAt: string;
+  createdAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  confidence: number | null;
+  insufficientEvidence: boolean;
+  createdAt: string;
+  citations: Citation[];
+}
+
+export interface ConversationDetail {
+  conversation: ConversationSummary;
+  messages: ChatMessage[];
+}

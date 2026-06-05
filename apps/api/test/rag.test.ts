@@ -28,6 +28,15 @@ describe("local providers", () => {
     expect(first).toEqual(second);
   });
 
+  it("scores related Chinese knowledge text higher than unrelated text", async () => {
+    const provider = new LocalEmbeddingProvider();
+    const query = await provider.embed("广告预算应该怎么控制？");
+    const related = await provider.embed("广告预算应该按照核心关键词、转化率和acos分层控制。");
+    const unrelated = await provider.embed("火星基地能源补给计划。");
+
+    expect(dot(query, related)).toBeGreaterThan(dot(query, unrelated));
+  });
+
   it("returns insufficient-evidence answer without contexts", async () => {
     const provider = new LocalChatProvider();
     const answer = await provider.answer("怎么优化广告？", [], true);
@@ -53,4 +62,35 @@ describe("local providers", () => {
     expect(answer).toContain("广告培训");
     expect(answer).toContain("低转化词需要降低出价");
   });
+
+  it("summarizes multiple retrieved contexts instead of only echoing the top chunk", async () => {
+    const provider = new LocalChatProvider();
+    const answer = await provider.answer(
+      "介绍下瀚海广盈的合作方式",
+      [
+        {
+          documentTitle: "瀚海广盈合作手册v5.pptx",
+          sourceLabel: "slide 5",
+          content: "合作方式：线上对接、季度汇报、东莞本地随时面谈，运营透明。",
+          relevanceScore: 0.52
+        },
+        {
+          documentTitle: "瀚海广盈合作手册v5.pptx",
+          sourceLabel: "slide 8",
+          content: "服务费只覆盖基础运营成本，合作风险共担，盈亏共享。",
+          relevanceScore: 0.49
+        }
+      ],
+      false
+    );
+
+    expect(answer).toContain("检索到的 2 条资料");
+    expect(answer).toContain("slide 5");
+    expect(answer).toContain("slide 8");
+    expect(answer).toContain("合作风险共担");
+  });
 });
+
+function dot(left: number[], right: number[]): number {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
